@@ -1,0 +1,28 @@
+[Unit]
+Description=Deskbook desk booking server (single instance)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=deskbook
+Group=deskbook
+WorkingDirectory=/opt/deskbook
+# Bind to the office LAN address (replace 192.168.1.20).
+ExecStart=/opt/deskbook/deskbook serve -addr 192.168.1.20:8080 -data /var/lib/deskbook/deskbook.json -web /opt/deskbook/web/dist
+Restart=on-failure
+RestartSec=3
+# Give in-flight writes time to finish on stop.
+TimeoutStopSec=15
+KillSignal=SIGTERM
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/deskbook
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

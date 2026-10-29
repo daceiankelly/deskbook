@@ -1,0 +1,7 @@
+node_modules/
+web/dist/
+web/public/pyodide/
+release/
+data/
+__pycache__/
+*.pyc

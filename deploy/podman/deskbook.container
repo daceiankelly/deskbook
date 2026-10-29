@@ -1,0 +1,40 @@
+# Podman Quadlet unit: starts Deskbook automatically on boot.
+#
+# Rootful:  /etc/containers/systemd/deskbook.container
+# Rootless: ~/.config/containers/systemd/deskbook.container  (+ `loginctl enable-linger <user>`)
+# Then:     systemctl daemon-reload && systemctl start deskbook
+#
+# One-off, before the first start (the secret is only read when no data exists yet):
+#   printf '%s' 'a-long-admin-password' | podman secret create deskbook-admin-password -
+
+[Unit]
+Description=Deskbook desk booking (single instance)
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+# Replace with your GitLab registry path; pin a commit tag for reproducible deploys.
+Image=registry.gitlab.example.com/office/deskbook:latest
+ContainerName=deskbook
+# Bind to the office LAN address only.
+PublishPort=192.168.1.20:8080:8080
+Volume=deskbook-data:/data
+Secret=deskbook-admin-password,type=env,target=DESKBOOK_ADMIN_PASSWORD
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=ALL
+HealthCmd=/app/deskbook healthcheck
+HealthInterval=30s
+HealthRetries=3
+HealthOnFailure=kill
+StopTimeout=15
+# Optional TLS: mount certs and override the command, e.g.
+# Volume=/etc/deskbook/tls:/tls:ro,Z
+# Exec=serve -addr 0.0.0.0:8443 -data /data/deskbook.json -web /app/web/dist -tls-cert /tls/cert.pem -tls-key /tls/key.pem
+
+[Service]
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target default.target

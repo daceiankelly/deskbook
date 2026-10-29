@@ -1,0 +1,6 @@
+# Shell scripts run inside Linux containers / the Podman machine: keep LF on Windows checkouts.
+*.sh text eol=lf
+Containerfile text eol=lf
+*.container text eol=lf
+*.service text eol=lf
+*.ps1 text eol=crlf

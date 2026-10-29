@@ -1,0 +1,59 @@
+# Deskbook CI: test -> build image with Podman -> smoke test -> push to the GitLab registry.
+#
+# Runner requirements for the image job (see docs/podman-gitlab.md):
+#   * Docker executor with `privileged = true` (nested Podman), or
+#   * a shell executor on a host with Podman installed (remove the `image:` line).
+
+stages:
+  - test
+  - image
+
+variables:
+  IMAGE_SHA: "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+  IMAGE_LATEST: "$CI_REGISTRY_IMAGE:latest"
+
+test:python:
+  stage: test
+  image: docker.io/library/python:3.12-slim
+  script:
+    - cd web/src/python
+    - python -m unittest discover -s tests -v
+
+test:go:
+  stage: test
+  image: docker.io/library/golang:1.24-bookworm
+  script:
+    - cd server
+    - go vet ./...
+    - go test -race -count=1 ./...
+
+test:web:
+  stage: test
+  image: docker.io/library/node:20.18.0-bookworm-slim
+  script:
+    - cd web
+    - if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+    - npm run build   # includes the offline check
+  artifacts:
+    paths: [web/dist]
+    expire_in: 1 week
+
+image:podman:
+  stage: image
+  image: quay.io/podman/stable:v5.2
+  needs: [test:python, test:go, test:web]
+  variables:
+    STORAGE_DRIVER: vfs        # works inside an unprivileged-overlay CI container
+    BUILDAH_ISOLATION: chroot
+  before_script:
+    - dnf -y -q install curl findutils procps-ng >/dev/null || true
+    - echo "$CI_REGISTRY_PASSWORD" | podman login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - podman build --pull -t "$IMAGE_SHA" -f Containerfile .
+    - bash deploy/podman/smoke-test.sh "$IMAGE_SHA"
+    - podman push "$IMAGE_SHA"
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
+        podman tag "$IMAGE_SHA" "$IMAGE_LATEST"
+        podman push "$IMAGE_LATEST"
+      fi
